@@ -24,11 +24,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// SSL sertifika hatalarını yoksay
+// Keep-alive ve timeout ayarları
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({  
-    rejectUnauthorized: false
-  })
+    rejectUnauthorized: false,
+    keepAlive: true,
+    timeout: 60000
+  }),
+  timeout: 60000 // 60 saniye
 });
 
 app.get('/health', (req, res) => {
@@ -47,7 +50,7 @@ app.get('/proxy', async (req, res) => {
     const response = await axiosInstance({
       method: 'GET',
       url: url,
-      timeout: 30000,
+      timeout: 60000, // 60 saniye
       headers: {
         'User-Agent': 'VLC/3.0.16 LibVLC/3.0.16',
         'Accept': '*/*',
@@ -55,7 +58,8 @@ app.get('/proxy', async (req, res) => {
         'Connection': 'keep-alive'
       },
       responseType: 'text',
-      maxRedirects: 5
+      maxRedirects: 5,
+      decompress: true // GZIP desteği
     });
 
     // M3U içerik kontrolü
@@ -72,7 +76,13 @@ app.get('/proxy', async (req, res) => {
       return res.status(400).json({ error: 'Invalid M3U format' });
     }
 
-    res.set('Content-Type', 'text/plain');
+    // Cache headers
+    res.set({
+      'Content-Type': 'text/plain',
+      'Cache-Control': 'public, max-age=300', // 5 dakika cache
+      'Connection': 'keep-alive'
+    });
+    
     res.send(content);
 
   } catch (error) {
